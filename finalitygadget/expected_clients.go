@@ -4,6 +4,7 @@ import (
 	"context"
 	"math/big"
 
+	roochtype "github.com/babylonlabs-io/finality-gadget/roochclient"
 	"github.com/babylonlabs-io/finality-gadget/types"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/wire"
@@ -35,4 +36,12 @@ type IEthL2Client interface {
 	HeaderByNumber(ctx context.Context, number *big.Int) (*eth.Header, error)
 	TransactionReceipt(ctx context.Context, txHash string) (*eth.Receipt, error)
 	Close()
+}
+
+type IRoochL2Client interface {
+	HeaderByNumber(ctx context.Context, number *big.Int) (*roochtype.Block, error)
+
+	// TODO support TransactionByHash RPC
+	TransactionByHash(ctx context.Context, txHash string) (*roochtype.Block, error)
+	//Close()
 }

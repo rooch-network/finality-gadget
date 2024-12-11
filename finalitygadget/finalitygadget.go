@@ -2,7 +2,6 @@ package finalitygadget
 
 import (
 	"context"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"math"
@@ -18,7 +17,8 @@ import (
 	"github.com/babylonlabs-io/finality-gadget/config"
 	"github.com/babylonlabs-io/finality-gadget/cwclient"
 	"github.com/babylonlabs-io/finality-gadget/db"
-	"github.com/babylonlabs-io/finality-gadget/ethl2client"
+	//"github.com/babylonlabs-io/finality-gadget/ethl2client"
+	roochclient "github.com/babylonlabs-io/finality-gadget/roochclient"
 	"github.com/babylonlabs-io/finality-gadget/testutil/mocks"
 	"github.com/babylonlabs-io/finality-gadget/types"
 	"github.com/ethereum/go-ethereum/common"
@@ -32,7 +32,9 @@ type FinalityGadget struct {
 	btcClient IBitcoinClient
 	bbnClient IBabylonClient
 	cwClient  ICosmWasmClient
-	l2Client  IEthL2Client
+	//l2Client  IEthL2Client
+	l2Client IRoochL2Client
+	//l2Client roochclient.RoochClient
 
 	db     db.IDatabaseHandler
 	logger *zap.Logger
@@ -86,7 +88,12 @@ func NewFinalityGadget(cfg *config.Config, db db.IDatabaseHandler, logger *zap.L
 	cwClient := cwclient.NewCosmWasmClient(babylonClient.QueryClient.RPCClient, cfg.FGContractAddress)
 
 	// Create L2 client
-	l2Client, err := ethl2client.NewEthL2Client(cfg.L2RPCHost)
+	//l2Client, err := ethl2client.NewEthL2Client(cfg.L2RPCHost)
+	//if err != nil {
+	//	return nil, err
+	//}
+	roochClientOptions := roochclient.RoochClientOptions{cfg.L2RPCHost, nil}
+	l2Client := roochclient.NewRoochClient(roochClientOptions)
 	if err != nil {
 		return nil, err
 	}
@@ -335,25 +342,26 @@ func (fg *FinalityGadget) GetBlockByHash(hash string) (*types.Block, error) {
 }
 
 func (fg *FinalityGadget) QueryTransactionStatus(txHash string) (*types.TransactionInfo, error) {
-	if err := validateEVMTxHash(txHash); err != nil {
-		return nil, err
-	}
-
-	// get block info
+	//if err := validateEVMTxHash(txHash); err != nil {
+	//	return nil, err
+	//}
+	//
+	//// get block info
+	//ctx := context.Background()
+	//txReceipt, err := fg.l2Client.TransactionReceipt(ctx, txHash)
+	//if err != nil || txReceipt == nil {
+	//	return nil, err
+	//}
+	//fg.logger.Debug("Transaction receipt", zap.Uint64("block_number", txReceipt.BlockBlockHeight))
 	ctx := context.Background()
-	txReceipt, err := fg.l2Client.TransactionReceipt(ctx, txHash)
-	if err != nil || txReceipt == nil {
-		return nil, err
-	}
-	fg.logger.Debug("Transaction receipt", zap.Uint64("block_number", txReceipt.BlockNumber.Uint64()))
-	header, err := fg.l2Client.HeaderByNumber(ctx, txReceipt.BlockNumber)
-	fg.logger.Debug("Block info", zap.String("block_hash", header.Hash().Hex()), zap.Uint64("block_timestamp", header.Time))
+	header, err := fg.l2Client.TransactionByHash(ctx, txHash)
+	fg.logger.Debug("Block info", zap.String("block_hash", header.BlockHash), zap.Uint64("block_timestamp", header.BlockTime))
 	if err != nil {
 		return nil, err
 	}
 
 	// get babylon finalized info
-	isBabylonFinalized, err := fg.QueryIsBlockFinalizedByHeight(txReceipt.BlockNumber.Uint64())
+	isBabylonFinalized, err := fg.QueryIsBlockFinalizedByHeight(header.BlockHeight)
 	fg.logger.Debug("Babylon finalization status", zap.Bool("is_finalized", isBabylonFinalized))
 	if err != nil {
 		return nil, err
@@ -361,34 +369,34 @@ func (fg *FinalityGadget) QueryTransactionStatus(txHash string) (*types.Transact
 
 	// get safe and finalized blocks
 	safeBlock, err := fg.l2Client.HeaderByNumber(ctx, big.NewInt(ethrpc.SafeBlockNumber.Int64()))
-	fg.logger.Debug("Safe block", zap.Uint64("block_number", safeBlock.Number.Uint64()))
+	fg.logger.Debug("Safe block", zap.Uint64("block_number", safeBlock.BlockHeight))
 	if err != nil {
 		return nil, err
 	}
 	finalizedBlock, err := fg.l2Client.HeaderByNumber(ctx, big.NewInt(ethrpc.FinalizedBlockNumber.Int64()))
-	fg.logger.Debug("Finalized block", zap.Uint64("block_number", finalizedBlock.Number.Uint64()))
+	fg.logger.Debug("Finalized block", zap.Uint64("block_number", finalizedBlock.BlockHeight))
 	if err != nil {
 		return nil, err
 	}
 
 	var status types.FinalityStatus
-	if finalizedBlock.Number.Uint64() >= header.Number.Uint64() {
+	if finalizedBlock.BlockHeight >= header.BlockHeight {
 		status = types.FinalityStatusFinalized
 	} else if isBabylonFinalized {
 		status = types.FinalityStatusBitcoinFinalized
-	} else if safeBlock.Number.Uint64() >= header.Number.Uint64() {
+	} else if safeBlock.BlockHeight >= header.BlockHeight {
 		status = types.FinalityStatusSafe
 	} else {
 		status = types.FinalityStatusPending
 	}
 
-	fg.logger.Debug("Transaction status", zap.String("block_hash", header.Hash().Hex()), zap.Uint64("block_height", header.Number.Uint64()), zap.String("tx_hash", txHash), zap.String("status", string(status)))
+	fg.logger.Debug("Transaction status", zap.String("block_hash", header.BlockHash), zap.Uint64("block_height", header.BlockHeight), zap.String("tx_hash", txHash), zap.String("status", string(status)))
 
 	return &types.TransactionInfo{
-		TxHash:           txReceipt.TxHash.Hex(),
-		BlockHeight:      header.Number.Uint64(),
-		BlockHash:        hex.EncodeToString(header.Hash().Bytes()),
-		BlockTimestamp:   header.Time,
+		TxHash:           header.BlockHash,
+		BlockHeight:      header.BlockHeight,
+		BlockHash:        header.BlockHash,
+		BlockTimestamp:   header.BlockTime,
 		Status:           status,
 		BabylonFinalized: isBabylonFinalized || status == types.FinalityStatusFinalized,
 	}, nil
@@ -421,10 +429,10 @@ func (fg *FinalityGadget) QueryChainSyncStatus() (*types.ChainSyncStatus, error)
 	}
 
 	return &types.ChainSyncStatus{
-		LatestBlockHeight:               latestBlock.Number.Uint64(),
+		LatestBlockHeight:               latestBlock.BlockHeight,
 		LatestBtcFinalizedBlockHeight:   latestBtcFinalizedBlock.BlockHeight,
 		EarliestBtcFinalizedBlockHeight: earliestBtcFinalizedBlock.BlockHeight,
-		LatestEthFinalizedBlockHeight:   latestEthFinalizedBlock.Number.Uint64(),
+		LatestEthFinalizedBlockHeight:   latestEthFinalizedBlock.BlockHeight,
 	}, nil
 }
 
@@ -465,8 +473,8 @@ func (fg *FinalityGadget) Startup(ctx context.Context) error {
 			if err != nil {
 				return fmt.Errorf("error fetching latest finalized L2 block: %w", err)
 			}
-			latestFinalizedHeight := latestFinalizedBlock.Number.Uint64()
-			latestFinalizedBlockTime := latestFinalizedBlock.Time
+			latestFinalizedHeight := latestFinalizedBlock.BlockHeight
+			latestFinalizedBlockTime := latestFinalizedBlock.BlockTime
 
 			// get the BTC staking activation timestamp
 			btcStakingActivatedTimestamp, err := fg.QueryBtcStakingActivatedTimestamp()
@@ -524,13 +532,13 @@ func (fg *FinalityGadget) ProcessBlocks(ctx context.Context) error {
 			if err != nil {
 				return fmt.Errorf("error fetching latest L2 block: %w", err)
 			}
-			fg.logger.Debug("Received latest block", zap.Uint64("block_height", latestBlock.Number.Uint64()))
+			fg.logger.Debug("Received latest block", zap.Uint64("block_height", latestBlock.BlockHeight))
 
 			// if the last processed block is less than the latest block, process all intervening blocks
-			if fg.lastProcessedHeight < latestBlock.Number.Uint64() {
-				fg.logger.Info("Processing new blocks", zap.Uint64("start_height", fg.lastProcessedHeight+1), zap.Uint64("end_height", latestBlock.Number.Uint64()))
-				if err := fg.processBlocksTillHeight(ctx, latestBlock.Number.Uint64()); err != nil {
-					return fmt.Errorf("error processing block %d: %w", latestBlock.Number.Uint64(), err)
+			if fg.lastProcessedHeight < latestBlock.BlockHeight {
+				fg.logger.Info("Processing new blocks", zap.Uint64("start_height", fg.lastProcessedHeight+1), zap.Uint64("end_height", latestBlock.BlockHeight))
+				if err := fg.processBlocksTillHeight(ctx, latestBlock.BlockHeight); err != nil {
+					return fmt.Errorf("error processing block %d: %w", latestBlock.BlockHeight, err)
 				}
 			}
 		}
@@ -561,7 +569,7 @@ func (fg *FinalityGadget) insertBlocks(blocks []*types.Block) error {
 }
 
 func (fg *FinalityGadget) Close() {
-	fg.l2Client.Close()
+	//fg.l2Client.Close()
 
 	if err := fg.db.Close(); err != nil {
 		fg.logger.Error("Error closing database", zap.Error(err))
@@ -595,9 +603,9 @@ func (fg *FinalityGadget) queryBlockByHeight(blockNumber int64) (*types.Block, e
 		return nil, err
 	}
 	return &types.Block{
-		BlockHeight:    header.Number.Uint64(),
-		BlockHash:      hex.EncodeToString(header.Hash().Bytes()),
-		BlockTimestamp: header.Time,
+		BlockHeight:    header.BlockHeight,
+		BlockHash:      header.BlockHash,
+		BlockTimestamp: header.BlockTime,
 	}, nil
 }
 
