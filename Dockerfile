@@ -1,5 +1,7 @@
 # Use the official Go image as the base image
-FROM golang:1.22-alpine AS builder
+FROM golang:1.22.7-alpine AS builder
+
+
 
 # Version to build. Default is the Git HEAD.
 ARG VERSION="HEAD"

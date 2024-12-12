@@ -1,6 +1,7 @@
 MOCKS_DIR := ./testutil/mocks
 
 OPFGD_PKG := github.com/babylonlabs-io/finality-gadget/cmd/opfgd
+ROOCHFGD_PKG := github.com/babylonlabs-io/finality-gadget/cmd/roochfgd
 
 BUILDDIR ?= $(CURDIR)/build
 BUILD_FLAGS := --tags '$(BUILD_TAGS)' --ldflags '$(LDFLAGS)'
@@ -34,9 +35,11 @@ build: go.sum $(BUILDDIR)/
 	CGO_CFLAGS="-O -D__BLST_PORTABLE__" go $@ -mod=readonly $(BUILD_FLAGS) $(BUILD_ARGS) ./...
 
 build-docker:
-	$(DOCKER) build \
-	--tag babylonlabs-io/finality-gadget \
-	-f Dockerfile \
-	$(GIT_ROOT)
+#	$(DOCKER) build \
+#	--tag baichuan3/finality-gadget \
+#	-f Dockerfile \
+#	$(GIT_ROOT)
+	$(DOCKER) build --tag baichuan3/finality-gadget  -f Dockerfile \
+		$(shell git rev-parse --show-toplevel)
 
 .PHONY: build build-docker
