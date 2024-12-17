@@ -39,7 +39,7 @@ build-docker:
 #	--tag baichuan3/finality-gadget \
 #	-f Dockerfile \
 #	$(GIT_ROOT)
-	$(DOCKER) build --tag baichuan3/finality-gadget  -f Dockerfile \
+	$(DOCKER) build --tag babylonlabs-io/finality-gadget  -f Dockerfile \
 		$(shell git rev-parse --show-toplevel)
 
 .PHONY: build build-docker
