@@ -1,4 +1,4 @@
-package roochcmd
+package main
 
 import (
 	"log"

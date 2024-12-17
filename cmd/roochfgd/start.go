@@ -1,4 +1,4 @@
-package roochcmd
+package main
 
 import (
 	"context"
@@ -7,6 +7,7 @@ import (
 	"github.com/cosmos/cosmos-sdk/client"
 	"github.com/spf13/cobra"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 
 	"github.com/babylonlabs-io/finality-gadget/config"
 	"github.com/babylonlabs-io/finality-gadget/db"
@@ -24,9 +25,9 @@ const (
 func CommandStart() *cobra.Command {
 	var cmd = &cobra.Command{
 		Use:     "start",
-		Short:   "Start the rooch finality gadget daemon",
-		Long:    `Start the rooch finality gadget daemon. Note that a config.toml file is required to start the daemon.`,
-		Example: `roochfgd start --cfg config.toml`,
+		Short:   "Start the op finality gadget daemon",
+		Long:    `Start the op finality gadget daemon. Note that a config.toml file is required to start the daemon.`,
+		Example: `opfgd start --cfg config.toml`,
 		Args:    cobra.NoArgs,
 		RunE:    runEWithClientCtx(runStartCmd),
 	}
@@ -45,7 +46,11 @@ func runStartCmd(ctx client.Context, cmd *cobra.Command, args []string) error {
 	}
 
 	// Create logger
-	logger, err := log.NewRootLogger("console", true)
+	logLevel, err := zapcore.ParseLevel(cfg.LogLevel)
+	if err != nil {
+		return fmt.Errorf("invalid log level: %w", err)
+	}
+	logger, err := log.NewRootLogger("console", logLevel)
 	if err != nil {
 		return fmt.Errorf("failed to create logger: %w", err)
 	}
@@ -55,7 +60,12 @@ func runStartCmd(ctx client.Context, cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("failed to create DB handler: %w", err)
 	}
-	defer db.Close()
+	defer func() {
+		logger.Info("Closing DB...")
+		if dbErr := db.Close(); dbErr != nil {
+			logger.Error("Error closing DB", zap.Error(dbErr))
+		}
+	}()
 	err = db.CreateInitialSchema()
 	if err != nil {
 		return fmt.Errorf("create initial buckets error: %w", err)
@@ -74,7 +84,7 @@ func runStartCmd(ctx client.Context, cmd *cobra.Command, args []string) error {
 	// Start monitoring BTC staking activation
 	go fg.MonitorBtcStakingActivation(fgCtx)
 
-	// Start grpc server
+	// Start both grpc and http servers
 	// Hook interceptor for os signals.
 	shutdownInterceptor, err := sig.Intercept()
 	if err != nil {
@@ -87,6 +97,11 @@ func runStartCmd(ctx client.Context, cmd *cobra.Command, args []string) error {
 			logger.Fatal("Finality gadget server error", zap.Error(err))
 		}
 	}()
+
+	// Start finality gadget
+	if err := fg.Startup(fgCtx); err != nil {
+		logger.Fatal("Error starting finality gadget", zap.Error(err))
+	}
 
 	// Run finality gadget in a separate goroutine
 	go func() {

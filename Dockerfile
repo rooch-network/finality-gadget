@@ -42,6 +42,7 @@ RUN addgroup --gid 1138 -S finality-gadget && adduser --uid 1138 -S finality-gad
 RUN apk add bash curl jq libstdc++ libgcc
 
 COPY --from=builder /go/src/github.com/babylonlabs-io/finality-gadget/build/opfgd /bin/opfgd
+COPY --from=builder /go/src/github.com/babylonlabs-io/finality-gadget/build/roochfgd /bin/roochfgd
 
 WORKDIR /home/finality-gadget
 RUN chown -R finality-gadget /home/finality-gadget
