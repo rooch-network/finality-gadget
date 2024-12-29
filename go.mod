@@ -249,9 +249,9 @@ require (
 replace (
 	// use cosmos fork of keyring
 	github.com/99designs/keyring => github.com/cosmos/keyring v1.2.0
+
+	github.com/babylonlabs-io/babylon => github.com/rooch-network/babylon v0.0.10
+	github.com/babylonlabs-io/finality-gadget => github.com/rooch-network/finality-gadget v0.0.1
 	github.com/gogo/protobuf => github.com/regen-network/protobuf v1.3.3-alpha.regen.1
 	github.com/syndtr/goleveldb => github.com/syndtr/goleveldb v1.0.1-0.20210819022825-2ae1ddf74ef7
-
-    github.com/babylonlabs-io/finality-gadget => github.com/rooch-network/finality-gadget v0.0.1
-    github.com/babylonlabs-io/babylon => github.com/rooch-network/babylon v0.0.2
 )
